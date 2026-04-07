@@ -64,5 +64,11 @@ async def trigger_scan(search_id: int, db: AsyncSession = Depends(get_db)):
     search = await db.get(Search, search_id)
     if not search:
         raise HTTPException(status_code=404, detail="Search not found")
-    # Pipeline integration in Step 6
-    return {"status": "scan_triggered", "search_id": search_id}
+
+    from app.pipeline.scan_pipeline import ScanPipeline
+    pipeline = ScanPipeline()
+    try:
+        result = await pipeline.run(search_id, db)
+        return result
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
