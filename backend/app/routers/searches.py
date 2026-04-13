@@ -1,4 +1,9 @@
+import asyncio
+import json
+import logging
+
 from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi.responses import StreamingResponse
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -6,6 +11,7 @@ from app.database import get_db
 from app.models.search import Search
 from app.schemas.search import SearchCreate, SearchOut, SearchUpdate
 
+logger = logging.getLogger(__name__)
 router = APIRouter()
 
 
@@ -72,3 +78,54 @@ async def trigger_scan(search_id: int, db: AsyncSession = Depends(get_db)):
         return result
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/{search_id}/scan-stream")
+async def scan_stream(search_id: int, db: AsyncSession = Depends(get_db)):
+    """Stream scan progress via Server-Sent Events."""
+    search = await db.get(Search, search_id)
+    if not search:
+        raise HTTPException(status_code=404, detail="Search not found")
+
+    log_queue: asyncio.Queue = asyncio.Queue()
+
+    async def progress(stage: str, message: str, data: dict | None = None):
+        event = {"stage": stage, "message": message}
+        if data:
+            event["data"] = data
+        await log_queue.put(event)
+
+    async def run_and_stream():
+        from app.pipeline.scan_pipeline import ScanPipeline
+        from app.database import async_session
+        from app.scheduler.scan_scheduler import set_manual_scan_active
+
+        set_manual_scan_active(True)
+        async with async_session() as scan_db:
+            pipeline = ScanPipeline()
+            try:
+                result = await pipeline.run(search_id, scan_db, progress_cb=progress)
+                await log_queue.put({"stage": "done", "message": "Scan complete", "data": result})
+            except Exception as e:
+                await log_queue.put({"stage": "error", "message": str(e)})
+            finally:
+                set_manual_scan_active(False)
+                await log_queue.put(None)  # sentinel
+
+    async def event_generator():
+        task = asyncio.create_task(run_and_stream())
+        try:
+            while True:
+                event = await log_queue.get()
+                if event is None:
+                    break
+                yield f"data: {json.dumps(event)}\n\n"
+        finally:
+            if not task.done():
+                task.cancel()
+
+    return StreamingResponse(
+        event_generator(),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+    )

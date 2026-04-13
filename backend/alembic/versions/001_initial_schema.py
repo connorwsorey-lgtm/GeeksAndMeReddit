@@ -38,7 +38,7 @@ def upgrade() -> None:
         sa.Column("subreddits", ARRAY(sa.String), server_default="{}"),
         sa.Column("intent_filters", ARRAY(sa.String), server_default="{}"),
         sa.Column("alert_threshold", sa.Integer, server_default="50"),
-        sa.Column("scan_frequency", sa.String(50), server_default="'daily'"),
+        sa.Column("scan_frequency", sa.String(50), server_default=sa.text("'daily'")),
         sa.Column("is_active", sa.Boolean, server_default="true"),
         sa.Column("last_scan_at", sa.DateTime),
         sa.Column("created_at", sa.DateTime, server_default=sa.func.now()),
@@ -58,13 +58,13 @@ def upgrade() -> None:
         sa.Column("author", sa.String(255)),
         sa.Column("engagement_score", sa.Integer, server_default="0"),
         sa.Column("post_created_at", sa.DateTime),
-        sa.Column("top_responses", JSONB, server_default="'[]'"),
+        sa.Column("top_responses", JSONB, server_default=sa.text("'[]'::jsonb")),
         sa.Column("intent_labels", ARRAY(sa.String), server_default="{}"),
-        sa.Column("intent_confidences", JSONB, server_default="'{}'"),
+        sa.Column("intent_confidences", JSONB, server_default=sa.text("'{}'::jsonb")),
         sa.Column("relevance_score", sa.Integer, server_default="0"),
         sa.Column("signal_summary", sa.Text),
         sa.Column("thread_gap_detected", sa.Boolean, server_default="false"),
-        sa.Column("status", sa.String(50), server_default="'new'"),
+        sa.Column("status", sa.String(50), server_default=sa.text("'new'")),
         sa.Column("created_at", sa.DateTime, server_default=sa.func.now()),
         sa.UniqueConstraint("source_type", "external_id"),
     )
@@ -75,7 +75,7 @@ def upgrade() -> None:
         sa.Column("client_id", sa.Integer, sa.ForeignKey("clients.id", ondelete="CASCADE"), nullable=False),
         sa.Column("channel", sa.String(50), nullable=False),
         sa.Column("recipient", sa.String(255), nullable=False),
-        sa.Column("mode", sa.String(50), server_default="'immediate'"),
+        sa.Column("mode", sa.String(50), server_default=sa.text("'immediate'")),
         sa.Column("digest_time", sa.Time),
         sa.Column("is_active", sa.Boolean, server_default="true"),
         sa.Column("created_at", sa.DateTime, server_default=sa.func.now()),
@@ -89,7 +89,7 @@ def upgrade() -> None:
         sa.Column("recipient", sa.String(255)),
         sa.Column("message_preview", sa.Text),
         sa.Column("sent_at", sa.DateTime, server_default=sa.func.now()),
-        sa.Column("delivery_status", sa.String(50), server_default="'sent'"),
+        sa.Column("delivery_status", sa.String(50), server_default=sa.text("'sent'")),
     )
 
 

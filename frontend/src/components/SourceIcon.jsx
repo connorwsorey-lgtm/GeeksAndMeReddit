@@ -1,8 +1,8 @@
-export default function SourceIcon() {
+export default function SourceIcon({ community }) {
   return (
-    <span className="inline-flex items-center gap-1 text-sm font-medium text-orange-600">
-      <span className="w-3 h-3 rounded-full bg-orange-600 inline-block" />
-      Reddit
+    <span className="inline-flex items-center gap-1.5 text-xs font-mono text-orange-400/80">
+      <span className="w-1.5 h-1.5 rounded-full bg-orange-400/60" />
+      r/{community}
     </span>
   );
 }

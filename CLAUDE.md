@@ -8,7 +8,7 @@ A Reddit monitoring tool for Fuel Results. Scrapes posts matching client keyword
 
 - **Backend:** Python 3.12, FastAPI, async SQLAlchemy, asyncpg
 - **Database:** PostgreSQL 16
-- **Scraping:** `asyncpraw` for Reddit (OAuth2)
+- **Scraping:** Reddit public JSON endpoints via `httpx` (no API key required)
 - **AI Classification:** Anthropic Claude API (`claude-sonnet-4-20250514`)
 - **WhatsApp Alerts:** WaSenderAPI (unofficial API, QR code auth)
 - **Frontend:** React 18, Vite, Tailwind CSS, React Router
@@ -43,7 +43,7 @@ backend/
     models/              — SQLAlchemy ORM models (5 tables)
     schemas/             — Pydantic request/response schemas
     routers/             — API endpoints (clients, searches, signals, notifications, dashboard)
-    source_adapters/     — Reddit scraping via asyncpraw
+    source_adapters/     — Reddit scraping via public JSON endpoints (httpx)
     classifiers/         — Claude API intent classification
     scoring/             — Weighted relevance scoring
     notifications/       — Alert channels (WhatsApp, in-app)
@@ -64,6 +64,8 @@ frontend/
 - **Notification adapters:** WhatsApp and in-app implement the same `NotificationAdapter` interface. WhatsApp is the primary channel.
 - **No authentication:** Internal tool, no login required.
 - **Deduplication:** `UNIQUE(source_type, external_id)` at the DB level. Also checked before sending to Claude API.
+- **Reddit scraping:** Uses public `.json` endpoints (no OAuth). Rate-limited to ~10 req/min, so scans take ~1 min for 25 posts. If Reddit approves API access, swap `RedditPublicAdapter` for the asyncpraw-based `RedditAdapter` in `scan_pipeline.py`.
+- **Scheduler:** APScheduler checks every 60s for searches due based on their `scan_frequency`. Runs inside the FastAPI lifespan.
 
 ## Intent Taxonomy
 
@@ -92,23 +94,24 @@ Thread gap = the client's product/service category is absent from existing repli
 ## Build Sequence
 
 1. ~~Project scaffold + database~~ (done)
-2. Client and Search CRUD (API + basic UI)
-3. Reddit source adapter (asyncpraw)
-4. Intent classifier (Claude API)
-5. Relevance scorer
-6. Scan pipeline (wire it all together)
-7. WhatsApp alerts (WaSenderAPI)
-8. Signal feed UI
-9. Notification settings UI
-10. Scheduler + client dashboard
+2. ~~Client and Search CRUD (API + basic UI)~~ (done)
+3. ~~Reddit source adapter (public JSON endpoints)~~ (done)
+4. ~~Intent classifier (Claude API)~~ (done)
+5. ~~Relevance scorer~~ (done)
+6. ~~Scan pipeline (wire it all together)~~ (done)
+7. ~~WhatsApp alerts (WaSenderAPI)~~ (done)
+8. ~~Signal feed UI~~ (done)
+9. ~~Notification settings UI~~ (done)
+10. ~~Scheduler + client dashboard~~ (done)
 
 ## Environment Variables
 
 See `.env.example`. Required for operation:
 - `DATABASE_URL` — PostgreSQL connection string
-- `REDDIT_CLIENT_ID` / `REDDIT_CLIENT_SECRET` / `REDDIT_USERNAME` / `REDDIT_PASSWORD` — Reddit API OAuth2
 - `ANTHROPIC_API_KEY` — Claude API for intent classification
 - `WASENDER_API_KEY` / `WASENDER_DEFAULT_RECIPIENT` — WhatsApp alerts
+
+Reddit scraping uses public JSON endpoints — no API credentials needed.
 
 ## Important Notes
 

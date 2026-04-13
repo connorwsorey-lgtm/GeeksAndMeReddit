@@ -9,6 +9,7 @@ class ClientCreate(BaseModel):
     vertical: str | None = None
     products_services: str | None = None
     competitors: str | None = None
+    website: str | None = None
 
 
 class ClientUpdate(BaseModel):
@@ -17,6 +18,7 @@ class ClientUpdate(BaseModel):
     vertical: str | None = None
     products_services: str | None = None
     competitors: str | None = None
+    website: str | None = None
 
 
 class ClientOut(BaseModel):
@@ -26,6 +28,10 @@ class ClientOut(BaseModel):
     vertical: str | None
     products_services: str | None
     competitors: str | None
+    website: str | None
+    gsc_property: str | None
+    gsc_tokens: dict | None
+    gsc_excluded_queries: list | None
     created_at: datetime
 
     model_config = {"from_attributes": True}

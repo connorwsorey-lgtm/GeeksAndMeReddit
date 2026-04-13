@@ -5,8 +5,9 @@ import {
   createSearch,
   updateSearch,
   deleteSearch,
-  triggerScan,
+  getSuggestions,
 } from "../api";
+import { useScan } from "../ScanContext";
 
 const INTENT_OPTIONS = [
   "recommendation_request",
@@ -40,7 +41,11 @@ export default function SearchManager() {
   const [editing, setEditing] = useState(null);
   const [form, setForm] = useState(EMPTY_FORM);
   const [error, setError] = useState(null);
-  const [scanning, setScanning] = useState(null);
+  const { scanning, scanResult, startScan, stopScan } = useScan();
+
+  // Suggestion state
+  const [suggestions, setSuggestions] = useState(null);
+  const [loadingSuggestions, setLoadingSuggestions] = useState(false);
 
   const load = async () => {
     setLoading(true);
@@ -62,12 +67,14 @@ export default function SearchManager() {
 
   const openCreate = () => {
     setEditing(null);
+    setSuggestions(null);
     setForm({ ...EMPTY_FORM, client_id: clients[0]?.id || "" });
     setShowForm(true);
   };
 
   const openEdit = (search) => {
     setEditing(search);
+    setSuggestions(null);
     setForm({
       client_id: search.client_id,
       name: search.name,
@@ -134,14 +141,56 @@ export default function SearchManager() {
     }
   };
 
-  const handleScan = async (id) => {
-    setScanning(id);
+  const handleScan = (id) => {
+    setError(null);
+    startScan(id);
+  };
+
+  const handleGetSuggestions = async () => {
+    if (!form.client_id) return;
+    setLoadingSuggestions(true);
+    setSuggestions(null);
     try {
-      await triggerScan(id);
+      const result = await getSuggestions(form.client_id);
+      setSuggestions(result);
+      // Auto-fill name if empty
+      if (!form.name && result.search_name_suggestion) {
+        setForm((f) => ({ ...f, name: result.search_name_suggestion }));
+      }
     } catch (e) {
-      setError(e.message);
+      setError("Suggestions failed: " + e.message);
     }
-    setScanning(null);
+    setLoadingSuggestions(false);
+  };
+
+  const addSubreddit = (sub) => {
+    const current = splitList(form.subreddits);
+    if (!current.includes(sub)) {
+      setForm((f) => ({
+        ...f,
+        subreddits: [...current, sub].join(", "),
+      }));
+    }
+  };
+
+  const addKeyword = (kw) => {
+    const current = splitList(form.keywords);
+    if (!current.includes(kw)) {
+      setForm((f) => ({
+        ...f,
+        keywords: [...current, kw].join(", "),
+      }));
+    }
+  };
+
+  const addNegativeKeyword = (kw) => {
+    const current = splitList(form.negative_keywords);
+    if (!current.includes(kw)) {
+      setForm((f) => ({
+        ...f,
+        negative_keywords: [...current, kw].join(", "),
+      }));
+    }
   };
 
   const toggleIntent = (intent) => {
@@ -155,111 +204,247 @@ export default function SearchManager() {
 
   const set = (field) => (e) => setForm({ ...form, [field]: e.target.value });
 
+  const currentSubs = splitList(form.subreddits);
+  const currentKeywords = splitList(form.keywords);
+  const currentNegKeywords = splitList(form.negative_keywords);
+
   return (
-    <div>
+    <div className="animate-fade-in">
       <div className="flex items-center justify-between mb-6">
-        <h1 className="text-2xl font-bold">Searches</h1>
+        <div>
+          <h1 className="text-xl font-bold text-slate-100 tracking-tight">
+            Searches
+          </h1>
+          <p className="text-xs text-slate-400 font-mono mt-0.5">
+            {searches.length} configured
+          </p>
+        </div>
         <button
           onClick={openCreate}
           disabled={clients.length === 0}
-          className="bg-blue-600 text-white px-4 py-2 rounded text-sm font-medium hover:bg-blue-700 disabled:opacity-50"
+          className="bg-accent-teal/15 text-accent-teal px-4 py-2 rounded-lg text-sm font-medium
+            hover:bg-accent-teal/25 transition-colors disabled:opacity-30 ring-1 ring-accent-teal/20"
         >
           + New Search
         </button>
       </div>
 
       {error && (
-        <div className="bg-red-50 text-red-700 px-4 py-2 rounded mb-4 text-sm">
+        <div className="bg-red-500/10 text-red-400 border border-red-500/20 px-4 py-2.5 rounded-lg mb-4 text-sm">
           {error}
         </div>
       )}
 
       {clients.length === 0 && !loading && (
-        <p className="text-gray-400 text-sm mb-4">
+        <p className="text-slate-400 text-sm mb-4">
           Create a client first before adding searches.
         </p>
       )}
 
       {/* Modal */}
       {showForm && (
-        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50">
           <form
             onSubmit={handleSubmit}
-            className="bg-white rounded-lg shadow-lg p-6 w-full max-w-lg max-h-[90vh] overflow-y-auto"
+            className="bg-canvas-100 border border-surface-border rounded-xl shadow-2xl p-6 w-full max-w-2xl max-h-[90vh] overflow-y-auto"
           >
-            <h2 className="text-lg font-bold mb-4">
+            <h2 className="text-lg font-bold text-slate-100 mb-5">
               {editing ? "Edit Search" : "New Search"}
             </h2>
 
-            <label className="block mb-3">
-              <span className="text-sm font-medium text-gray-700">Client *</span>
-              <select
-                required
-                value={form.client_id}
-                onChange={set("client_id")}
-                className="mt-1 block w-full border border-gray-300 rounded px-3 py-2 text-sm"
-              >
-                <option value="">Select client...</option>
-                {clients.map((c) => (
-                  <option key={c.id} value={c.id}>
-                    {c.name}
-                  </option>
-                ))}
-              </select>
-            </label>
+            {/* Client + suggest row */}
+            <div className="flex gap-3 mb-4">
+              <label className="block flex-1">
+                <span className="text-xs text-slate-400 font-mono block mb-1.5">
+                  CLIENT <span className="text-accent-teal">*</span>
+                </span>
+                <select
+                  required
+                  value={form.client_id}
+                  onChange={(e) => {
+                    set("client_id")(e);
+                    setSuggestions(null);
+                  }}
+                  className="form-input"
+                >
+                  <option value="">Select client...</option>
+                  {clients.map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.name}
+                      {c.vertical ? ` (${c.vertical})` : ""}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <div className="flex items-end">
+                <button
+                  type="button"
+                  onClick={handleGetSuggestions}
+                  disabled={!form.client_id || loadingSuggestions}
+                  className="bg-violet-500/15 text-violet-400 px-4 py-2 rounded-lg text-sm font-medium
+                    hover:bg-violet-500/25 transition-colors disabled:opacity-30 ring-1 ring-violet-500/20
+                    whitespace-nowrap"
+                >
+                  {loadingSuggestions ? (
+                    <span className="flex items-center gap-2">
+                      <span className="w-2 h-2 rounded-full bg-violet-400 animate-pulse" />
+                      Generating...
+                    </span>
+                  ) : (
+                    "AI Suggest"
+                  )}
+                </button>
+              </div>
+            </div>
 
-            <label className="block mb-3">
-              <span className="text-sm font-medium text-gray-700">Search Name *</span>
+            <FormField label="Search Name" required>
               <input
                 required
                 value={form.name}
                 onChange={set("name")}
-                placeholder="e.g. Goat milk soap — skincare subs"
-                className="mt-1 block w-full border border-gray-300 rounded px-3 py-2 text-sm"
+                placeholder="e.g. PI Attorney — NOLA area subs"
+                className="form-input"
               />
-            </label>
+            </FormField>
 
-            <label className="block mb-3">
-              <span className="text-sm font-medium text-gray-700">Keywords *</span>
+            {/* Keywords with suggestions */}
+            <FormField label="Keywords" required hint="Comma-separated. Click suggestions below to add.">
               <input
                 required
                 value={form.keywords}
                 onChange={set("keywords")}
-                placeholder="goat milk soap, goat milk skincare, eczema soap"
-                className="mt-1 block w-full border border-gray-300 rounded px-3 py-2 text-sm"
+                placeholder="personal injury lawyer, car accident attorney"
+                className="form-input"
               />
-              <span className="text-xs text-gray-400">Comma-separated</span>
-            </label>
+            </FormField>
 
-            <label className="block mb-3">
-              <span className="text-sm font-medium text-gray-700">
-                Negative Keywords
-              </span>
+            {suggestions?.keywords && (
+              <div className="mb-4 -mt-2">
+                {suggestions.keywords.primary?.length > 0 && (
+                  <div className="mb-2">
+                    <span className="text-xs text-violet-400/70 font-mono">PRIMARY</span>
+                    <div className="flex flex-wrap gap-1.5 mt-1">
+                      {suggestions.keywords.primary.map((kw) => (
+                        <SuggestionChip
+                          key={kw}
+                          label={kw}
+                          active={currentKeywords.includes(kw)}
+                          onClick={() => addKeyword(kw)}
+                        />
+                      ))}
+                    </div>
+                  </div>
+                )}
+                {suggestions.keywords.long_tail?.length > 0 && (
+                  <div>
+                    <span className="text-xs text-violet-400/70 font-mono">LONG TAIL</span>
+                    <div className="flex flex-wrap gap-1.5 mt-1">
+                      {suggestions.keywords.long_tail.map((kw) => (
+                        <SuggestionChip
+                          key={kw}
+                          label={kw}
+                          active={currentKeywords.includes(kw)}
+                          onClick={() => addKeyword(kw)}
+                        />
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Negative keywords with suggestions */}
+            <FormField label="Negative Keywords" hint="Comma-separated">
               <input
                 value={form.negative_keywords}
                 onChange={set("negative_keywords")}
-                placeholder="recipe, DIY, homemade"
-                className="mt-1 block w-full border border-gray-300 rounded px-3 py-2 text-sm"
+                placeholder="recipe, DIY, meme"
+                className="form-input"
               />
-              <span className="text-xs text-gray-400">Comma-separated</span>
-            </label>
+            </FormField>
 
-            <label className="block mb-3">
-              <span className="text-sm font-medium text-gray-700">Subreddits</span>
+            {suggestions?.negative_keywords?.length > 0 && (
+              <div className="mb-4 -mt-2">
+                <span className="text-xs text-violet-400/70 font-mono">SUGGESTED EXCLUSIONS</span>
+                <div className="flex flex-wrap gap-1.5 mt-1">
+                  {suggestions.negative_keywords.map((kw) => (
+                    <SuggestionChip
+                      key={kw}
+                      label={kw}
+                      active={currentNegKeywords.includes(kw)}
+                      onClick={() => addNegativeKeyword(kw)}
+                      variant="red"
+                    />
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Subreddits with categorized suggestions */}
+            <FormField label="Subreddits" hint="Comma-separated. Empty = all of Reddit.">
               <input
                 value={form.subreddits}
                 onChange={set("subreddits")}
-                placeholder="SkincareAddiction, eczema, NaturalBeauty"
-                className="mt-1 block w-full border border-gray-300 rounded px-3 py-2 text-sm"
+                placeholder="legaladvice, personalinjury, NewOrleans"
+                className="form-input"
               />
-              <span className="text-xs text-gray-400">
-                Comma-separated. Leave empty to search all of Reddit.
-              </span>
-            </label>
+            </FormField>
 
-            <div className="mb-3">
-              <span className="text-sm font-medium text-gray-700 block mb-1">
-                Intent Filters
+            {suggestions?.subreddits && (
+              <div className="mb-4 -mt-2 space-y-2">
+                {suggestions.subreddits.vertical?.length > 0 && (
+                  <div>
+                    <span className="text-xs text-violet-400/70 font-mono">INDUSTRY</span>
+                    <div className="flex flex-wrap gap-1.5 mt-1">
+                      {suggestions.subreddits.vertical.map((sub) => (
+                        <SuggestionChip
+                          key={sub}
+                          label={`r/${sub}`}
+                          active={currentSubs.includes(sub)}
+                          onClick={() => addSubreddit(sub)}
+                          variant="orange"
+                        />
+                      ))}
+                    </div>
+                  </div>
+                )}
+                {suggestions.subreddits.location?.length > 0 && (
+                  <div>
+                    <span className="text-xs text-violet-400/70 font-mono">LOCATION</span>
+                    <div className="flex flex-wrap gap-1.5 mt-1">
+                      {suggestions.subreddits.location.map((sub) => (
+                        <SuggestionChip
+                          key={sub}
+                          label={`r/${sub}`}
+                          active={currentSubs.includes(sub)}
+                          onClick={() => addSubreddit(sub)}
+                          variant="blue"
+                        />
+                      ))}
+                    </div>
+                  </div>
+                )}
+                {suggestions.subreddits.general?.length > 0 && (
+                  <div>
+                    <span className="text-xs text-violet-400/70 font-mono">GENERAL</span>
+                    <div className="flex flex-wrap gap-1.5 mt-1">
+                      {suggestions.subreddits.general.map((sub) => (
+                        <SuggestionChip
+                          key={sub}
+                          label={`r/${sub}`}
+                          active={currentSubs.includes(sub)}
+                          onClick={() => addSubreddit(sub)}
+                        />
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+
+            <div className="mb-4">
+              <span className="text-xs text-slate-400 font-mono block mb-2">
+                INTENT FILTERS
               </span>
               <div className="flex flex-wrap gap-2">
                 {INTENT_OPTIONS.map((intent) => (
@@ -267,45 +452,35 @@ export default function SearchManager() {
                     key={intent}
                     type="button"
                     onClick={() => toggleIntent(intent)}
-                    className={`px-2 py-1 rounded text-xs font-medium border ${
+                    className={`px-2.5 py-1 rounded text-xs font-mono transition-colors ring-1 ${
                       form.intent_filters.includes(intent)
-                        ? "bg-blue-100 border-blue-300 text-blue-800"
-                        : "bg-gray-50 border-gray-200 text-gray-500"
+                        ? "bg-accent-teal/15 ring-accent-teal/30 text-accent-teal"
+                        : "bg-canvas-200 ring-surface-border text-slate-400 hover:text-slate-200"
                     }`}
                   >
                     {intent.replace("_", " ")}
                   </button>
                 ))}
               </div>
-              <span className="text-xs text-gray-400">
-                Select which intent types to monitor. Leave empty for all.
-              </span>
             </div>
 
-            <div className="grid grid-cols-2 gap-3 mb-3">
-              <label className="block">
-                <span className="text-sm font-medium text-gray-700">
-                  Alert Threshold
-                </span>
+            <div className="grid grid-cols-2 gap-3 mb-4">
+              <FormField label="Alert Threshold" hint="Min score 0-100">
                 <input
                   type="number"
                   min={0}
                   max={100}
                   value={form.alert_threshold}
                   onChange={set("alert_threshold")}
-                  className="mt-1 block w-full border border-gray-300 rounded px-3 py-2 text-sm"
+                  className="form-input"
                 />
-                <span className="text-xs text-gray-400">Min score to alert (0-100)</span>
-              </label>
+              </FormField>
 
-              <label className="block">
-                <span className="text-sm font-medium text-gray-700">
-                  Scan Frequency
-                </span>
+              <FormField label="Scan Frequency">
                 <select
                   value={form.scan_frequency}
                   onChange={set("scan_frequency")}
-                  className="mt-1 block w-full border border-gray-300 rounded px-3 py-2 text-sm"
+                  className="form-input"
                 >
                   {FREQUENCY_OPTIONS.map((f) => (
                     <option key={f} value={f}>
@@ -313,31 +488,33 @@ export default function SearchManager() {
                     </option>
                   ))}
                 </select>
-              </label>
+              </FormField>
             </div>
 
-            <label className="flex items-center gap-2 mb-4">
+            <label className="flex items-center gap-2.5 mb-5">
               <input
                 type="checkbox"
                 checked={form.is_active}
                 onChange={(e) => setForm({ ...form, is_active: e.target.checked })}
+                className="accent-accent-teal"
               />
-              <span className="text-sm text-gray-700">Active</span>
+              <span className="text-sm text-slate-300">Active</span>
             </label>
 
             <div className="flex justify-end gap-3">
               <button
                 type="button"
                 onClick={() => setShowForm(false)}
-                className="px-4 py-2 text-sm text-gray-600 hover:text-gray-800"
+                className="px-4 py-2 text-sm text-slate-400 hover:text-slate-200 transition-colors"
               >
                 Cancel
               </button>
               <button
                 type="submit"
-                className="bg-blue-600 text-white px-4 py-2 rounded text-sm font-medium hover:bg-blue-700"
+                className="bg-accent-teal/15 text-accent-teal px-5 py-2 rounded-lg text-sm font-medium
+                  hover:bg-accent-teal/25 transition-colors ring-1 ring-accent-teal/20"
               >
-                {editing ? "Save Changes" : "Create Search"}
+                {editing ? "Save" : "Create"}
               </button>
             </div>
           </form>
@@ -346,88 +523,109 @@ export default function SearchManager() {
 
       {/* Table */}
       {loading ? (
-        <p className="text-gray-400 text-sm">Loading...</p>
+        <div className="text-center py-16">
+          <div className="inline-flex items-center gap-2 text-slate-400 text-sm">
+            <span className="w-2 h-2 rounded-full bg-accent-teal animate-pulse" />
+            Loading...
+          </div>
+        </div>
       ) : searches.length === 0 ? (
-        <p className="text-gray-400 text-sm">No searches yet.</p>
+        <div className="text-center py-16 border border-dashed border-surface-border rounded-lg">
+          <p className="text-slate-400 text-sm">No searches configured yet.</p>
+        </div>
       ) : (
-        <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
+        <div className="bg-surface rounded-lg border border-surface-border overflow-hidden">
           <table className="w-full text-sm">
-            <thead className="bg-gray-50 text-left text-gray-500 font-medium">
-              <tr>
-                <th className="px-4 py-3">Name</th>
-                <th className="px-4 py-3">Client</th>
-                <th className="px-4 py-3">Keywords</th>
-                <th className="px-4 py-3">Frequency</th>
-                <th className="px-4 py-3">Threshold</th>
-                <th className="px-4 py-3">Status</th>
-                <th className="px-4 py-3">Last Scan</th>
-                <th className="px-4 py-3 text-right">Actions</th>
+            <thead>
+              <tr className="border-b border-surface-border">
+                {["NAME", "CLIENT", "KEYWORDS", "SUBS", "FREQ", "THRESHOLD", "STATUS", "LAST SCAN", "ACTIONS"].map(
+                  (h, i) => (
+                    <th
+                      key={h}
+                      className={`px-4 py-3 text-xs text-slate-400 font-mono font-medium ${
+                        h === "ACTIONS" ? "text-right" : "text-left"
+                      }`}
+                    >
+                      {h}
+                    </th>
+                  )
+                )}
               </tr>
             </thead>
             <tbody>
               {searches.map((s) => (
-                <tr key={s.id} className="border-t border-gray-100 hover:bg-gray-50">
-                  <td className="px-4 py-3 font-medium">{s.name}</td>
-                  <td className="px-4 py-3 text-gray-500">
+                <tr
+                  key={s.id}
+                  className="border-t border-surface-border row-hover"
+                >
+                  <td className="px-4 py-3 font-medium text-slate-200">
+                    {s.name}
+                  </td>
+                  <td className="px-4 py-3 text-slate-400">
                     {clientName(s.client_id)}
                   </td>
-                  <td className="px-4 py-3 text-gray-500">
+                  <td className="px-4 py-3">
                     <div className="flex flex-wrap gap-1">
-                      {s.keywords.slice(0, 3).map((k) => (
+                      {s.keywords.slice(0, 2).map((k) => (
                         <span
                           key={k}
-                          className="bg-gray-100 text-gray-600 px-1.5 py-0.5 rounded text-xs"
+                          className="bg-canvas-200 text-slate-300 px-1.5 py-0.5 rounded text-xs font-mono"
                         >
                           {k}
                         </span>
                       ))}
-                      {s.keywords.length > 3 && (
-                        <span className="text-gray-400 text-xs">
-                          +{s.keywords.length - 3}
+                      {s.keywords.length > 2 && (
+                        <span className="text-slate-500 text-xs font-mono">
+                          +{s.keywords.length - 2}
                         </span>
                       )}
                     </div>
                   </td>
-                  <td className="px-4 py-3 text-gray-500">
+                  <td className="px-4 py-3 text-slate-400 text-xs font-mono">
+                    {(s.subreddits || []).length || "all"}
+                  </td>
+                  <td className="px-4 py-3 text-slate-400 text-xs font-mono">
                     {s.scan_frequency.replace("_", " ")}
                   </td>
-                  <td className="px-4 py-3 text-gray-500">{s.alert_threshold}</td>
+                  <td className="px-4 py-3 text-slate-400 font-mono text-xs">
+                    {s.alert_threshold}
+                  </td>
                   <td className="px-4 py-3">
                     <button
                       onClick={() => handleToggleActive(s)}
-                      className={`text-xs font-medium px-2 py-0.5 rounded ${
+                      className={`text-xs font-mono font-medium px-2 py-0.5 rounded ring-1 transition-colors ${
                         s.is_active
-                          ? "bg-green-100 text-green-700"
-                          : "bg-gray-100 text-gray-500"
+                          ? "bg-emerald-500/10 text-emerald-400 ring-emerald-500/20"
+                          : "bg-slate-500/10 text-slate-400 ring-slate-500/20"
                       }`}
                     >
-                      {s.is_active ? "Active" : "Paused"}
+                      {s.is_active ? "ACTIVE" : "PAUSED"}
                     </button>
                   </td>
-                  <td className="px-4 py-3 text-gray-400 text-xs">
+                  <td className="px-4 py-3 text-slate-400 text-xs font-mono">
                     {s.last_scan_at
                       ? new Date(s.last_scan_at).toLocaleString()
-                      : "Never"}
+                      : "never"}
                   </td>
                   <td className="px-4 py-3 text-right whitespace-nowrap">
                     <button
                       onClick={() => handleScan(s.id)}
                       disabled={scanning === s.id}
-                      className="text-green-600 hover:text-green-800 text-xs mr-3 disabled:opacity-50"
+                      className="text-accent-teal/80 hover:text-accent-teal text-xs font-mono mr-3 disabled:opacity-30 transition-colors"
                     >
-                      {scanning === s.id ? "Scanning..." : "Scan Now"}
+                      {scanning === s.id ? "SCANNING..." : "SCAN"}
                     </button>
                     <button
                       onClick={() => openEdit(s)}
-                      className="text-gray-500 hover:text-blue-600 text-xs mr-3"
+                      className="text-slate-400 hover:text-slate-200 text-xs font-mono mr-3 transition-colors"
                     >
-                      Edit
+                      EDIT
                     </button>
                     <button
                       onClick={() => handleDelete(s.id)}
-                      className="text-gray-400 hover:text-red-600 text-xs"
+                      className="text-slate-500 hover:text-red-400 text-xs font-mono transition-colors"
                     >
-                      Delete
+                      DEL
                     </button>
                   </td>
                 </tr>
@@ -437,5 +635,56 @@ export default function SearchManager() {
         </div>
       )}
     </div>
+  );
+}
+
+function FormField({ label, required, hint, children }) {
+  return (
+    <label className="block mb-4">
+      <span className="text-xs text-slate-400 font-mono block mb-1.5">
+        {label.toUpperCase()}
+        {required && <span className="text-accent-teal ml-1">*</span>}
+      </span>
+      {children}
+      {hint && (
+        <span className="text-xs text-slate-500 font-mono mt-1 block">
+          {hint}
+        </span>
+      )}
+    </label>
+  );
+}
+
+const CHIP_VARIANTS = {
+  default: {
+    active: "bg-accent-teal/20 ring-accent-teal/40 text-accent-teal",
+    inactive: "bg-canvas-200 ring-surface-border text-slate-400 hover:text-slate-200 hover:ring-slate-500",
+  },
+  orange: {
+    active: "bg-orange-500/20 ring-orange-500/40 text-orange-300",
+    inactive: "bg-canvas-200 ring-surface-border text-slate-400 hover:text-orange-300 hover:ring-orange-500/30",
+  },
+  blue: {
+    active: "bg-blue-500/20 ring-blue-500/40 text-blue-300",
+    inactive: "bg-canvas-200 ring-surface-border text-slate-400 hover:text-blue-300 hover:ring-blue-500/30",
+  },
+  red: {
+    active: "bg-red-500/20 ring-red-500/40 text-red-300",
+    inactive: "bg-canvas-200 ring-surface-border text-slate-400 hover:text-red-300 hover:ring-red-500/30",
+  },
+};
+
+function SuggestionChip({ label, active, onClick, variant = "default" }) {
+  const styles = CHIP_VARIANTS[variant];
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={`px-2 py-0.5 rounded text-xs font-mono ring-1 transition-all cursor-pointer ${
+        active ? styles.active : styles.inactive
+      }`}
+    >
+      {active ? "+" : ""}{label}
+    </button>
   );
 }

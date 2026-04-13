@@ -4,6 +4,7 @@ import { getClients, createClient, updateClient, deleteClient } from "../api";
 
 const EMPTY_FORM = {
   name: "",
+  website: "",
   location: "",
   vertical: "",
   products_services: "",
@@ -43,6 +44,7 @@ export default function ClientManager() {
     setEditing(client);
     setForm({
       name: client.name,
+      website: client.website || "",
       location: client.location || "",
       vertical: client.vertical || "",
       products_services: client.products_services || "",
@@ -80,101 +82,112 @@ export default function ClientManager() {
   const set = (field) => (e) => setForm({ ...form, [field]: e.target.value });
 
   return (
-    <div>
+    <div className="animate-fade-in">
       <div className="flex items-center justify-between mb-6">
-        <h1 className="text-2xl font-bold">Clients</h1>
+        <div>
+          <h1 className="text-xl font-bold text-slate-100 tracking-tight">
+            Clients
+          </h1>
+          <p className="text-xs text-slate-400 font-mono mt-0.5">
+            {clients.length} registered
+          </p>
+        </div>
         <button
           onClick={openCreate}
-          className="bg-blue-600 text-white px-4 py-2 rounded text-sm font-medium hover:bg-blue-700"
+          className="bg-accent-teal/15 text-accent-teal px-4 py-2 rounded-lg text-sm font-medium
+            hover:bg-accent-teal/25 transition-colors ring-1 ring-accent-teal/20"
         >
           + New Client
         </button>
       </div>
 
       {error && (
-        <div className="bg-red-50 text-red-700 px-4 py-2 rounded mb-4 text-sm">
+        <div className="bg-red-500/10 text-red-400 border border-red-500/20 px-4 py-2.5 rounded-lg mb-4 text-sm">
           {error}
         </div>
       )}
 
       {/* Modal */}
       {showForm && (
-        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50">
           <form
             onSubmit={handleSubmit}
-            className="bg-white rounded-lg shadow-lg p-6 w-full max-w-lg"
+            className="bg-canvas-100 border border-surface-border rounded-xl shadow-2xl p-6 w-full max-w-lg"
           >
-            <h2 className="text-lg font-bold mb-4">
+            <h2 className="text-lg font-bold text-slate-100 mb-5">
               {editing ? "Edit Client" : "New Client"}
             </h2>
 
-            <label className="block mb-3">
-              <span className="text-sm font-medium text-gray-700">Name *</span>
+            <FormField label="Name" required>
               <input
                 required
                 value={form.name}
                 onChange={set("name")}
-                className="mt-1 block w-full border border-gray-300 rounded px-3 py-2 text-sm"
+                className="form-input"
               />
-            </label>
+            </FormField>
 
-            <label className="block mb-3">
-              <span className="text-sm font-medium text-gray-700">Location</span>
+            <FormField label="Website">
+              <input
+                value={form.website}
+                onChange={set("website")}
+                placeholder="e.g. seanreganlaw.com"
+                className="form-input"
+              />
+            </FormField>
+
+            <FormField label="Location">
               <input
                 value={form.location}
                 onChange={set("location")}
                 placeholder="e.g. New Orleans, LA"
-                className="mt-1 block w-full border border-gray-300 rounded px-3 py-2 text-sm"
+                className="form-input"
               />
-            </label>
+            </FormField>
 
-            <label className="block mb-3">
-              <span className="text-sm font-medium text-gray-700">Vertical</span>
+            <FormField label="Vertical">
               <input
                 value={form.vertical}
                 onChange={set("vertical")}
                 placeholder="e.g. Skincare, Legal, Construction"
-                className="mt-1 block w-full border border-gray-300 rounded px-3 py-2 text-sm"
+                className="form-input"
               />
-            </label>
+            </FormField>
 
-            <label className="block mb-3">
-              <span className="text-sm font-medium text-gray-700">
-                Products / Services
-              </span>
+            <FormField label="Products / Services">
               <textarea
                 value={form.products_services}
                 onChange={set("products_services")}
                 rows={2}
                 placeholder="Key products or services this client offers"
-                className="mt-1 block w-full border border-gray-300 rounded px-3 py-2 text-sm"
+                className="form-input"
               />
-            </label>
+            </FormField>
 
-            <label className="block mb-4">
-              <span className="text-sm font-medium text-gray-700">Competitors</span>
+            <FormField label="Competitors">
               <textarea
                 value={form.competitors}
                 onChange={set("competitors")}
                 rows={2}
                 placeholder="Known competitors (comma-separated)"
-                className="mt-1 block w-full border border-gray-300 rounded px-3 py-2 text-sm"
+                className="form-input"
               />
-            </label>
+            </FormField>
 
-            <div className="flex justify-end gap-3">
+            <div className="flex justify-end gap-3 mt-1">
               <button
                 type="button"
                 onClick={() => setShowForm(false)}
-                className="px-4 py-2 text-sm text-gray-600 hover:text-gray-800"
+                className="px-4 py-2 text-sm text-slate-500 hover:text-slate-300 transition-colors"
               >
                 Cancel
               </button>
               <button
                 type="submit"
-                className="bg-blue-600 text-white px-4 py-2 rounded text-sm font-medium hover:bg-blue-700"
+                className="bg-accent-teal/15 text-accent-teal px-5 py-2 rounded-lg text-sm font-medium
+                  hover:bg-accent-teal/25 transition-colors ring-1 ring-accent-teal/20"
               >
-                {editing ? "Save Changes" : "Create Client"}
+                {editing ? "Save" : "Create"}
               </button>
             </div>
           </form>
@@ -183,49 +196,86 @@ export default function ClientManager() {
 
       {/* Table */}
       {loading ? (
-        <p className="text-gray-400 text-sm">Loading...</p>
+        <div className="text-center py-16">
+          <div className="inline-flex items-center gap-2 text-slate-600 text-sm">
+            <span className="w-2 h-2 rounded-full bg-accent-teal animate-pulse" />
+            Loading...
+          </div>
+        </div>
       ) : clients.length === 0 ? (
-        <p className="text-gray-400 text-sm">No clients yet. Create one to get started.</p>
+        <div className="text-center py-16 border border-dashed border-surface-border rounded-lg">
+          <p className="text-slate-500 text-sm">No clients yet. Create one to get started.</p>
+        </div>
       ) : (
-        <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
+        <div className="bg-surface rounded-lg border border-surface-border overflow-hidden">
           <table className="w-full text-sm">
-            <thead className="bg-gray-50 text-left text-gray-500 font-medium">
-              <tr>
-                <th className="px-4 py-3">Name</th>
-                <th className="px-4 py-3">Location</th>
-                <th className="px-4 py-3">Vertical</th>
-                <th className="px-4 py-3">Created</th>
-                <th className="px-4 py-3 text-right">Actions</th>
+            <thead>
+              <tr className="border-b border-surface-border">
+                <th className="px-4 py-3 text-left text-xs text-slate-400 font-mono font-medium">
+                  NAME
+                </th>
+                <th className="px-4 py-3 text-left text-xs text-slate-400 font-mono font-medium">
+                  LOCATION
+                </th>
+                <th className="px-4 py-3 text-left text-xs text-slate-400 font-mono font-medium">
+                  VERTICAL
+                </th>
+                <th className="px-4 py-3 text-left text-xs text-slate-400 font-mono font-medium">
+                  GSC
+                </th>
+                <th className="px-4 py-3 text-left text-xs text-slate-400 font-mono font-medium">
+                  CREATED
+                </th>
+                <th className="px-4 py-3 text-right text-xs text-slate-400 font-mono font-medium">
+                  ACTIONS
+                </th>
               </tr>
             </thead>
             <tbody>
               {clients.map((c) => (
-                <tr key={c.id} className="border-t border-gray-100 hover:bg-gray-50">
+                <tr
+                  key={c.id}
+                  className="border-t border-surface-border row-hover"
+                >
                   <td className="px-4 py-3 font-medium">
                     <button
                       onClick={() => navigate(`/clients/${c.id}`)}
-                      className="text-blue-600 hover:underline"
+                      className="text-accent-teal hover:text-accent-teal/80 transition-colors"
                     >
                       {c.name}
                     </button>
                   </td>
-                  <td className="px-4 py-3 text-gray-500">{c.location || "—"}</td>
-                  <td className="px-4 py-3 text-gray-500">{c.vertical || "—"}</td>
-                  <td className="px-4 py-3 text-gray-400">
+                  <td className="px-4 py-3 text-slate-500">
+                    {c.location || "—"}
+                  </td>
+                  <td className="px-4 py-3 text-slate-500">
+                    {c.vertical || "—"}
+                  </td>
+                  <td className="px-4 py-3">
+                    {c.gsc_tokens ? (
+                      <span className="flex items-center gap-1.5 text-xs font-mono text-emerald-400">
+                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
+                        ON
+                      </span>
+                    ) : (
+                      <span className="text-xs font-mono text-slate-500">—</span>
+                    )}
+                  </td>
+                  <td className="px-4 py-3 text-slate-600 text-xs font-mono">
                     {new Date(c.created_at).toLocaleDateString()}
                   </td>
                   <td className="px-4 py-3 text-right">
                     <button
                       onClick={() => openEdit(c)}
-                      className="text-gray-500 hover:text-blue-600 mr-3 text-xs"
+                      className="text-slate-500 hover:text-slate-300 text-xs font-mono mr-3 transition-colors"
                     >
-                      Edit
+                      EDIT
                     </button>
                     <button
                       onClick={() => handleDelete(c.id)}
-                      className="text-gray-400 hover:text-red-600 text-xs"
+                      className="text-slate-600 hover:text-red-400 text-xs font-mono transition-colors"
                     >
-                      Delete
+                      DEL
                     </button>
                   </td>
                 </tr>
@@ -235,5 +285,17 @@ export default function ClientManager() {
         </div>
       )}
     </div>
+  );
+}
+
+function FormField({ label, required, children }) {
+  return (
+    <label className="block mb-4">
+      <span className="text-xs text-slate-500 font-mono block mb-1.5">
+        {label.toUpperCase()}
+        {required && <span className="text-accent-teal ml-1">*</span>}
+      </span>
+      {children}
+    </label>
   );
 }

@@ -1,3 +1,153 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+@layer base {
+  /* Custom scrollbar */
+  ::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+  ::-webkit-scrollbar-track {
+    background: #07090f;
+  }
+  ::-webkit-scrollbar-thumb {
+    background: #1e2736;
+    border-radius: 3px;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: #2a3446;
+  }
+
+  /* Selection */
+  ::selection {
+    background: rgba(6, 214, 160, 0.25);
+    color: #e2e8f0;
+  }
+
+  /* Form controls dark theme */
+  select,
+  input[type="text"],
+  input[type="number"],
+  input[type="time"],
+  textarea {
+    color-scheme: dark;
+  }
+}
+
+@layer components {
+  /* Dot-grid background texture */
+  .bg-dotgrid {
+    background-image: radial-gradient(
+      circle,
+      rgba(255, 255, 255, 0.03) 1px,
+      transparent 1px
+    );
+    background-size: 24px 24px;
+  }
+
+  /* Subtle noise overlay */
+  .bg-noise::before {
+    content: "";
+    position: fixed;
+    inset: 0;
+    z-index: 0;
+    pointer-events: none;
+    opacity: 0.015;
+    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+    background-repeat: repeat;
+    background-size: 256px 256px;
+  }
+
+  /* Card glow on high-score signals */
+  .card-glow-high {
+    box-shadow: inset 0 0 0 1px rgba(34, 197, 94, 0.15),
+      0 0 20px -4px rgba(34, 197, 94, 0.08);
+  }
+  .card-glow-medium {
+    box-shadow: inset 0 0 0 1px rgba(245, 158, 11, 0.12),
+      0 0 20px -4px rgba(245, 158, 11, 0.06);
+  }
+
+  /* Thread gap pulse ring */
+  .gap-pulse {
+    position: relative;
+  }
+  .gap-pulse::after {
+    content: "";
+    position: absolute;
+    inset: -2px;
+    border-radius: 6px;
+    border: 1px solid rgba(6, 214, 160, 0.4);
+    animation: glowPulse 2s ease-in-out infinite;
+    pointer-events: none;
+  }
+
+  @keyframes glowPulse {
+    0%,
+    100% {
+      opacity: 0.4;
+      border-color: rgba(6, 214, 160, 0.3);
+    }
+    50% {
+      opacity: 1;
+      border-color: rgba(6, 214, 160, 0.6);
+    }
+  }
+
+  /* Scan-line effect for nav */
+  .scanline {
+    position: relative;
+    overflow: hidden;
+  }
+  .scanline::after {
+    content: "";
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    height: 1px;
+    background: linear-gradient(
+      90deg,
+      transparent,
+      rgba(6, 214, 160, 0.3) 20%,
+      rgba(6, 214, 160, 0.5) 50%,
+      rgba(6, 214, 160, 0.3) 80%,
+      transparent
+    );
+  }
+
+  /* Staggered fade-in for lists */
+  .stagger > *:nth-child(1) { animation-delay: 0ms; }
+  .stagger > *:nth-child(2) { animation-delay: 40ms; }
+  .stagger > *:nth-child(3) { animation-delay: 80ms; }
+  .stagger > *:nth-child(4) { animation-delay: 120ms; }
+  .stagger > *:nth-child(5) { animation-delay: 160ms; }
+  .stagger > *:nth-child(6) { animation-delay: 200ms; }
+  .stagger > *:nth-child(7) { animation-delay: 240ms; }
+  .stagger > *:nth-child(8) { animation-delay: 280ms; }
+  .stagger > *:nth-child(9) { animation-delay: 320ms; }
+  .stagger > *:nth-child(10) { animation-delay: 360ms; }
+
+  /* Shared form input */
+  .form-input {
+    @apply mt-1 block w-full bg-canvas-200 border border-surface-border text-slate-200 rounded px-3 py-2.5 text-sm
+      placeholder:text-slate-500/70 focus:outline-none focus:border-accent-teal/40 transition-colors;
+  }
+
+  /* Global size bump for readability */
+  .label-mono {
+    @apply text-xs text-slate-400 font-mono;
+  }
+  .chip {
+    @apply px-2.5 py-1 rounded text-xs font-mono ring-1 transition-all cursor-pointer;
+  }
+
+  /* Table row hover */
+  .row-hover {
+    transition: background-color 0.15s ease;
+  }
+  .row-hover:hover {
+    background-color: rgba(255, 255, 255, 0.02);
+  }
+}

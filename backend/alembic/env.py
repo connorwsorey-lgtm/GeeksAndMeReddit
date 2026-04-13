@@ -7,7 +7,7 @@ from sqlalchemy.ext.asyncio import async_engine_from_config
 
 from app.config import settings
 from app.database import Base
-from app.models import Client, Search, Signal, NotificationConfig, AlertLog  # noqa: F401
+from app.models import Client, Search, Signal, NotificationConfig, AlertLog, ClientPhrase  # noqa: F401
 
 config = context.config
 config.set_main_option("sqlalchemy.url", settings.database_url)

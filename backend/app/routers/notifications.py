@@ -51,7 +51,65 @@ async def delete_notification_config(config_id: int, db: AsyncSession = Depends(
     await db.commit()
 
 
+@router.get("/whatsapp-groups")
+async def list_whatsapp_groups():
+    """Fetch all WhatsApp groups from WaSender so user can pick a group JID."""
+    import httpx
+    from app.config import settings
+
+    if not settings.wasender_api_key:
+        raise HTTPException(status_code=400, detail="WASENDER_API_KEY not set")
+
+    async with httpx.AsyncClient() as client:
+        resp = await client.get(
+            "https://wasenderapi.com/api/groups",
+            headers={"Authorization": f"Bearer {settings.wasender_api_key}"},
+        )
+        if resp.status_code != 200:
+            raise HTTPException(status_code=502, detail=f"WaSender error: {resp.status_code}")
+
+        data = resp.json()
+        # WaSender returns groups with id (JID) and subject (name)
+        groups = data if isinstance(data, list) else data.get("groups", data.get("data", []))
+        return {
+            "groups": [
+                {
+                    "jid": g.get("id") or g.get("jid") or g.get("groupId", ""),
+                    "name": g.get("subject") or g.get("name") or g.get("groupName", "Unknown"),
+                    "participants": g.get("size") or g.get("participants", 0),
+                }
+                for g in groups
+            ]
+        }
+
+
 @router.post("/test")
 async def test_notification():
-    # WhatsApp test alert integration in Step 7
-    return {"status": "test_not_yet_implemented"}
+    from app.config import settings
+    from app.notifications.base import AlertPayload
+    from app.notifications.whatsapp import WhatsAppNotifier
+
+    if not settings.wasender_api_key or not settings.wasender_default_recipient:
+        raise HTTPException(
+            status_code=400,
+            detail="WASENDER_API_KEY and WASENDER_DEFAULT_RECIPIENT must be set in .env",
+        )
+
+    payload = AlertPayload(
+        signal_id=0,
+        post_title="Test Alert — UGC Signal Scraper is connected",
+        post_url="https://reddit.com",
+        community="test",
+        intent_labels=["recommendation_request"],
+        relevance_score=85,
+        signal_summary="This is a test notification to verify your WhatsApp connection is working.",
+        client_name="Test Client",
+        search_name="Test Search",
+        thread_gap_detected=False,
+    )
+
+    notifier = WhatsAppNotifier(api_key=settings.wasender_api_key)
+    success = await notifier.send(payload, settings.wasender_default_recipient)
+    if not success:
+        raise HTTPException(status_code=502, detail="WhatsApp delivery failed")
+    return {"status": "sent", "recipient": settings.wasender_default_recipient}
